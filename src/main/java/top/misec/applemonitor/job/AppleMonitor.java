@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author MoshiCoCo
@@ -30,7 +31,27 @@ public class AppleMonitor {
 
     private static final long DEVICE_INTERVAL_MS = 1500L;
 
+    // Cron may construct separate task instances; backoff and exclusion must be shared.
+    private static final ReentrantLock MONITOR_LOCK = new ReentrantLock();
+    private static final CycleBackoff BACKOFF = new CycleBackoff();
+
     public void monitor() {
+        if (!MONITOR_LOCK.tryLock()) {
+            log.debug("上一轮监控尚未结束，跳过本次调度");
+            return;
+        }
+        try {
+            if (BACKOFF.skipCycle()) {
+                log.info("接口限流退让中，跳过本次监控周期");
+                return;
+            }
+            monitorDevices();
+        } finally {
+            MONITOR_LOCK.unlock();
+        }
+    }
+
+    private void monitorDevices() {
 
         List<DeviceItem> deviceItemList = CONFIG.getAppleTaskConfig().getDeviceCodeList();
         //监视机型型号
@@ -38,6 +59,10 @@ public class AppleMonitor {
         for (DeviceItem deviceItem : deviceItemList) {
             try {
                 doMonitor(deviceItem);
+            } catch (RateLimitedException e) {
+                log.warn("Apple 接口请求过于频繁（HTTP {}），结束本轮，退让 {} 个监控周期",
+                        e.status, BACKOFF.rateLimited());
+                return;
             } catch (Exception e) {
                 log.error("监控机型 {} 时发生异常，继续处理剩余机型", deviceItem.getDeviceCode(), e);
             }
@@ -103,8 +128,12 @@ public class AppleMonitor {
         try {
             JSONObject responseJsonObject;
             try (HttpResponse httpResponse = HttpRequest.get(url).header(headers).execute()) {
+                int status = httpResponse.getStatus();
+                if (status == 429 || status == 541) {
+                    throw new RateLimitedException(status);
+                }
                 if (!httpResponse.isOk()) {
-                    log.info("请求过于频繁，请调整cronExpressions，建议您参考推荐的cron表达式");
+                    log.warn("Apple 接口请求失败，HTTP 状态码：{}", status);
                     return;
                 }
 
@@ -133,6 +162,8 @@ public class AppleMonitor {
                 log.debug("Apple 接口响应 body：{}", responseBody);
                 return;
             }
+
+            BACKOFF.reset();
 
             if (stores.isEmpty()) {
                 log.info("您所在的 {} 附近没有Apple直营店，请检查您的地址是否正确", CONFIG.getAppleTaskConfig().getLocation());
@@ -172,12 +203,22 @@ public class AppleMonitor {
                 }
             });
 
+        } catch (RateLimitedException e) {
+            throw e;
         } catch (Exception e) {
             log.error("AppleMonitor error", e);
         }
 
     }
 
+
+    private static final class RateLimitedException extends RuntimeException {
+        private final int status;
+
+        private RateLimitedException(int status) {
+            this.status = status;
+        }
+    }
 
     /**
      * check store inventory

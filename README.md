@@ -59,6 +59,8 @@ regions.
 1. 下载构建的产物压缩包 [releases版本](https://github.com/MoshiCoCo/Apple-Monitor/releases)
 2. 解压压缩包，文件内会包含一个可执行的jar和一份config.json配置文件，以及说明文档若干。
 3. 编辑config.json配置你需要监控的产品型号以及地区即可，可支持cron表达式自定义监控频率。
+
+库存接口返回限流状态（HTTP 429 / 541）时，立即结束本轮监控，并依次跳过后续 12、16、20、24 个 cron 调度周期；持续限流时最多退让 24 个周期。收到正常库存响应后重置，下次限流从 12 个周期开始。退让对全部机型生效，重叠的监控调度会跳过，无需修改配置。
 4. 执行命令 `java -jar apple-monitor-v*.jar`
 
 **配置文件参数解释**

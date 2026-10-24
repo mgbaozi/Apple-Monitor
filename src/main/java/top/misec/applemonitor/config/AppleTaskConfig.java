@@ -22,8 +22,15 @@ public class AppleTaskConfig {
     public String location;
     public String cronExpressions;
     public String country;
+    public int backoffMinCycles = 12;
+    public int backoffStepCycles = 4;
+    public int backoffMaxCycles = 24;
 
     public boolean valid() {
+        if (backoffMinCycles < 1 || backoffStepCycles < 1 || backoffMaxCycles < backoffMinCycles) {
+            log.error("退让配置无效：backoffMinCycles 和 backoffStepCycles 必须大于 0，backoffMaxCycles 必须不小于 backoffMinCycles");
+            return false;
+        }
         if (CollectionUtil.isEmpty(deviceCodeList)) {
             log.info("需要监控的设备型号号码不能为空，类似于 MQ0D3CH/A ");
             return false;

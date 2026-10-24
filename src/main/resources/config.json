@@ -2,6 +2,9 @@
   "appleTaskConfig": {
     "cronExpressions": "*/12 * * * * ?",
     "country": "CN",
+    "backoffMinCycles": 12,
+    "backoffStepCycles": 4,
+    "backoffMaxCycles": 24,
     "location": "广东 深圳 南山区",
     "deviceCodeList": [
       {

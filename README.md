@@ -60,7 +60,7 @@ regions.
 2. 解压压缩包，文件内会包含一个可执行的jar和一份config.json配置文件，以及说明文档若干。
 3. 编辑config.json配置你需要监控的产品型号以及地区即可，可支持cron表达式自定义监控频率。
 
-库存接口返回限流状态（HTTP 429 / 541）时，立即结束本轮监控，并依次跳过后续 12、16、20、24 个 cron 调度周期；持续限流时最多退让 24 个周期。收到正常库存响应后重置，下次限流从 12 个周期开始。退让对全部机型生效，重叠的监控调度会跳过，无需修改配置。
+库存接口返回限流状态（HTTP 429 / 541）时，立即结束本轮监控，并依次跳过后续 12、16、20、24 个 cron 调度周期；持续限流时最多退让 24 个周期。收到正常库存响应后重置，下次限流从 12 个周期开始。退让对全部机型生效，重叠的监控调度会跳过。可通过 appleTaskConfig 中的 backoffMinCycles、backoffStepCycles、backoffMaxCycles 设置最小周期、递增步进和最大周期；不填写时默认分别为 12、4、24。最小周期和步进必须为正整数，最大周期不得小于最小周期。修改配置后需重启程序。
 4. 执行命令 `java -jar apple-monitor-v*.jar`
 
 **配置文件参数解释**
@@ -68,6 +68,9 @@ regions.
 | 值                 | 含义                                                                                  |
 |-------------------|-------------------------------------------------------------------------------------|
 | cronExpressions   | 执行的cron表达式,建议执行时间间隔设置为 （监控的设备型号数*3）秒，如果你不会写corn表达式，建议使用程序输出的推荐表达式                   |
+| backoffMinCycles  | 限流后首次跳过的 cron 周期数，正整数，默认 12 |
+| backoffStepCycles | 连续限流时增加的周期数，正整数，默认 4 |
+| backoffMaxCycles  | 退让周期上限，不得小于 backoffMinCycles，默认 24 |
 | country           | Supported: CN, CN-HK, CN-MO, CN-TW, JP, KR, SG, MY, AU, UK, CA, US                  |
 | location          | 你所在的区域，要用苹果官网风格的地址，例如 广东 深圳 南山区 或者 重庆 重庆 XX区（其他地区请用邮政编码）                            |
 | deviceCodeList    | Object List                                                                         |
@@ -87,6 +90,9 @@ regions.
   "appleTaskConfig": {
     "cronExpressions": "*/12 * * * * ?",
     "country": "CN",
+    "backoffMinCycles": 12,
+    "backoffStepCycles": 4,
+    "backoffMaxCycles": 24,
     "location": "广东 深圳 南山区",
     "deviceCodeList": [
       {

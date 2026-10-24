@@ -33,7 +33,16 @@ public class AppleMonitor {
 
     // Cron may construct separate task instances; backoff and exclusion must be shared.
     private static final ReentrantLock MONITOR_LOCK = new ReentrantLock();
-    private static final CycleBackoff BACKOFF = new CycleBackoff();
+    private static CycleBackoff backoff;
+
+    private CycleBackoff backoff() {
+        if (backoff == null) {
+            AppleTaskConfig taskConfig = CONFIG.getAppleTaskConfig();
+            backoff = new CycleBackoff(taskConfig.getBackoffMinCycles(),
+                    taskConfig.getBackoffStepCycles(), taskConfig.getBackoffMaxCycles());
+        }
+        return backoff;
+    }
 
     public void monitor() {
         if (!MONITOR_LOCK.tryLock()) {
@@ -41,7 +50,7 @@ public class AppleMonitor {
             return;
         }
         try {
-            if (BACKOFF.skipCycle()) {
+            if (backoff().skipCycle()) {
                 log.info("接口限流退让中，跳过本次监控周期");
                 return;
             }
@@ -61,7 +70,7 @@ public class AppleMonitor {
                 doMonitor(deviceItem);
             } catch (RateLimitedException e) {
                 log.warn("Apple 接口请求过于频繁（HTTP {}），结束本轮，退让 {} 个监控周期",
-                        e.status, BACKOFF.rateLimited());
+                        e.status, backoff().rateLimited());
                 return;
             } catch (Exception e) {
                 log.error("监控机型 {} 时发生异常，继续处理剩余机型", deviceItem.getDeviceCode(), e);
@@ -163,7 +172,7 @@ public class AppleMonitor {
                 return;
             }
 
-            BACKOFF.reset();
+            backoff().reset();
 
             if (stores.isEmpty()) {
                 log.info("您所在的 {} 附近没有Apple直营店，请检查您的地址是否正确", CONFIG.getAppleTaskConfig().getLocation());
